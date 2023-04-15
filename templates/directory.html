@@ -30,8 +30,8 @@
 
       <h1>list of files</h1><br/>
         {% for i in file_list %}
-        <form action="/versions/{{ i }}" method="post">
-          {{ i }}<input type="submit" value="Manage Versions"/><br/>
+        <form action="/versions/{{ i.name }}" method="post">
+          {{ i.display_name }}<input type="submit" value="Manage Versions"/><br/>
         </form>
       {% endfor %}
 

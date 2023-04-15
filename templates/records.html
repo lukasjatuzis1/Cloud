@@ -30,10 +30,10 @@
       <h1>list of files</h1><br/>
         {% for i in file_list %}
         <form action="/download_file/{{ i.name }}" method="post">
-          {{ i.name }}<input type="submit" value="Download"/><br/>
+          {{ i.display_name }}<br/> {{i.date}} <br/><input type="submit" value="Download"/>
         </form>
         <form action="/delete_file/{{ i.name }}" method="post">
-          <input type="submit" value="Delete"/><br/>
+          <input type="submit" value="Delete"/>
         </form>
       {% endfor %}
 

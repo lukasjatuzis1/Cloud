@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import os
 import random
 from flask import Flask, render_template
@@ -10,6 +10,7 @@ from google.cloud import storage
 import local_constants
 from DirectoryClass import DirectoryClass
 from RecordClass import RecordClass
+from StorageSize import StorageSize
 
 credential_path = "lukas-project.json"
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credential_path
@@ -204,7 +205,7 @@ def openDirectory(filename):
       file_na = full_version_name[1]
       if(file_in_current_directory == filename):
        for j in file_list:
-        full_path1 = j.split("~", 1)
+        full_path1 = j.name.split("~", 1)
         file_in_current_directory1 = full_path1[0]
         file_full_name1 = full_path1[1]
         if file_full_name1 == file_na:
@@ -212,11 +213,11 @@ def openDirectory(filename):
          break
        if found_same_file == "false":
         i.name = file_full_name
-        file_list.append(i.name)
+        i.display_name = file_na
+        file_list.append(i)
 
   except ValueError as exc:
    error_message = str(exc)
- print("Displaying Files:", file_list)
  return render_template('directory.html', user_data=claims, error_message=error_message, user_info=user_info, file_list=file_list, no_directories=no_directories)
 
 #Naviagte to this Function to Add a File
@@ -260,7 +261,11 @@ def uploadFileHandler():
    if file_already_exists == "false":
     print("File does not exist within this directory, Uploading File")
     file.filename = "0~" + file.filename
-    addFile(file)
+    storage_size_bytes = getStorageSize()
+    if storage_size_bytes > 5000000:
+     print("Storage Over 5MB, Not Uploading File")
+    else:
+     addFile(file)
 
   except ValueError as exc:
    error_message = str(exc)
@@ -312,6 +317,7 @@ def versionFileHandler(filename):
    claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
    user_info = retrieveUserInfo(claims)
    file_versions = []
+   file_dates = []
    blob_list = blobList(None)
    if(blob_list):
     for i in blob_list:
@@ -325,6 +331,13 @@ def versionFileHandler(filename):
        file_name2 = full_path2[1]
        if file_name1 == file_name2:
         i.name = file_version_name
+        print(i.time_created)
+        date_raw = i.time_created
+        date = date_raw.year , date_raw.month, date_raw.day
+        print(date)
+        file_dates.append(date)
+        i.display_name = file_name1
+        i.date = date
         file_versions.append(i)
    # file_version_name = filename.split("/", 1)
    # file_named = file_version_name[1]
@@ -334,7 +347,7 @@ def versionFileHandler(filename):
   except ValueError as exc:
    error_message = str(exc)
 
- return render_template('records.html', user_data=claims, error_message=error_message, file_list=file_versions)
+ return render_template('records.html', user_data=claims, error_message=error_message, file_list=file_versions, file_dates=file_dates)
 
 #Naviagte to this Function to Add a File
 @app.route('/upload_file_version', methods=['post'])
@@ -375,11 +388,25 @@ def uploadFileVersionHandler():
    print(highest_version)
    print(openedRecord.getRecord())
    file.filename = highest_version + "~" + openedRecord.getRecord()
-   addFile(file)
+   storage_size_bytes = getStorageSize()
+   if storage_size_bytes > 5000000:
+       print("Storage Over 5MB, Not Uploading File")
+   else:
+    addFile(file)
   except ValueError as exc:
    error_message = str(exc)
  return redirect('/')
 
+#Get Storage Size
+def getStorageSize():
+ size = 0
+ blob_list = blobList(None)
+ if(blob_list):
+  for i in blob_list:
+   if i.name[len(i.name) - 1] != '/' or i.name != "/~" :
+    size = size + i.size
+ size = size - 6618
+ return size
 
 #Add new Directory within Home Page
 def addDirectory(directory_name):
@@ -474,8 +501,10 @@ def root():
 
   except ValueError as exc:
    error_message = str(exc)
-
- return render_template('index.html', user_data=claims, error_message=error_message, user_info=user_info, directory_list=directory_list)
+ storage_size_bytes = getStorageSize()
+ storage_size_kb = storage_size_bytes/1000
+ storage_size = storage_size_kb/1000
+ return render_template('index.html', user_data=claims, error_message=error_message, user_info=user_info, directory_list=directory_list, storage_size=storage_size)
 
 #Start Application
 if __name__ == '__main__':
@@ -483,5 +512,8 @@ if __name__ == '__main__':
  openedDirectory = DirectoryClass("")
  global openedRecord
  openedRecord = RecordClass("")
+ global storageSize
+ storageSize = StorageSize(0)
+ getStorageSize()
 
  app.run(host='127.0.0.1', port=8060, debug=True)
