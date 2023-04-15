@@ -19,20 +19,21 @@
         <dt>Email:</dt><dd>{{ user_data['email'] }}</dd>
       </dl>
 
-      <form action="/add_directory" method="post">
-        Directory Name: <input type="text" name="dir_name"/><input type="submit" value="Add Directory"/>
+      <form action="/upload_file" method="post" enctype="multipart/form-data">
+        Upload File: <input type="file" name="file_name"/><input type="submit" value="Upload"/>
       </form>
 
 
-        <h1>list of directories</h1><br/>
-        {% for i in directory_list %}
-          <form action="/open_directory/{{ i.name }}" method="post">
-            {{ i.name }}<input type="submit" value="Open"/><br/>
-          </form>
-          <form action="/delete_directory/{{ i.name }}" method="post">
-           <input type="submit" value="Delete"/><br/>
-          </form>
-        {% endfor %}
+      <form action="/back" method="post">
+        <input type="submit" value="Back to Home"/><br/>
+      </form>
+
+      <h1>list of files</h1><br/>
+        {% for i in file_list %}
+        <form action="/versions/{{ i }}" method="post">
+          {{ i }}<input type="submit" value="Manage Versions"/><br/>
+        </form>
+      {% endfor %}
 
       {% elif error_message %}
       <p>Error Message: {{ error_message }}</p>
