@@ -1,0 +1,12 @@
+#indexes:    #defines an index for the visit entities, any entity that has an ancestor relationship must be defined indexes for it.
+#- kind: visit   #declaring that visit entity has ancestors connected to it.
+#  ancestor: yes
+#  properties:
+#  - name: timestamp
+#    direction: desc
+#-----------------------------------------------------------------------------------------
+indexes:
+- kind: DummyData
+  properties:
+  - name: boolean
+  - name: id
