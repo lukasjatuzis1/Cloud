@@ -148,6 +148,10 @@ def addDirectoryHandler():
     return redirect('/')
    directory_name = directory_name + "/"
    user_info = retrieveUserInfo(claims)
+   entity = datastore.Entity(key = datastore_client.key(user_info['email']))
+   entity.update({"directory_name" : directory_name})  #update will add attributes if they are not defined in the entity.
+                                               #if it already exists in the tnity, it will overwrite the value for that attribute.
+   datastore_client.put(entity)       #store entity in the datastore
    addDirectory(directory_name)
   except ValueError as exc:
    error_message = str(exc)
@@ -293,8 +297,8 @@ def uploadFileHandler():
  return redirect('/')
 
 #Naviagte to this Function to Delete a File
-@app.route('/delete_file/<string:filename>', methods=['post'])
-def deleteFile(filename):
+@app.route('/delete_file/<string:dirname>/<string:filename>', methods=['post'])
+def deleteFile(dirname,filename):
  print("Attempting to Delete:", filename)
  id_token = request.cookies.get("token")
  error_message = None
@@ -304,7 +308,12 @@ def deleteFile(filename):
  if id_token:
   try:
    claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
-   deleteBlob(filename)
+   user_info = retrieveUserInfo(claims)
+   if user_info == None:
+    createUserInfo(claims)
+    user_info = retrieveUserInfo(claims)
+
+   deleteBlob(dirname,filename)
   except ValueError as exc:
    error_message = str(exc)
  return redirect('/')
@@ -333,6 +342,8 @@ def versionFileHandler(dirname,filename):
  claims = None
  times = None
  user_info = None
+ file_versions = []
+ file_dates = []
  print("1")
  if id_token:
   print("2")
@@ -348,8 +359,6 @@ def versionFileHandler(dirname,filename):
     print("7")
     user_info = retrieveUserInfo(claims)
    print("8")
-   file_versions = []
-   file_dates = []
    blob_list = blobList(None)
    if(blob_list):
     for i in blob_list:
@@ -380,6 +389,63 @@ def versionFileHandler(dirname,filename):
    error_message = str(exc)
 
  return render_template('records.html', user_data=claims, error_message=error_message, file_list=file_versions, file_dates=file_dates)
+
+#Open Versions of Selected File
+@app.route('/shared_versions/<string:dirname>/<string:filename>', methods=['post'])
+def sharedVersionFileHandler(dirname,filename):
+ openedDirectory.setDirectory(dirname)
+ id_token = request.cookies.get("token")
+ error_message = None
+ claims = None
+ times = None
+ user_info = None
+ file_versions = []
+ file_dates = []
+ print("1")
+ if id_token:
+  print("2")
+  try:
+   print("3")
+   claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
+   print("4")
+   user_info = retrieveUserInfo(claims)
+   print("5")
+   if user_info == None:
+    print("6")
+    createUserInfo(claims)
+    print("7")
+    user_info = retrieveUserInfo(claims)
+   print("8")
+   blob_list = blobList(None)
+   if(blob_list):
+    for i in blob_list:
+     if i.name[len(i.name) - 1] != '/':
+      if(openedDirectory.getDirectory() + "/" in i.name):
+       full_path = i.name.split("/", 1)
+       file_version_name = full_path[1]
+       full_path1 = file_version_name.split("~", 1)
+       file_name1 = full_path1[1]
+       full_path2 = filename.split("~", 1)
+       file_name2 = full_path2[1]
+       if file_name1 == file_name2:
+        # i.name = file_version_name
+        print(i.time_created)
+        date_raw = i.time_created
+        date = date_raw.year , date_raw.month, date_raw.day
+        print(date)
+        file_dates.append(date)
+        i.display_name = file_name1
+        i.date = date
+        file_versions.append(i)
+   # file_version_name = filename.split("/", 1)
+   # file_named = file_version_name[1]
+   file_name_only = filename.split("~", 1)
+   file_set_record_name = file_name_only[1]
+   openedRecord.setRecord(file_set_record_name)
+  except ValueError as exc:
+   error_message = str(exc)
+
+ return render_template('shared_versions.html', user_data=claims, error_message=error_message, file_list=file_versions, file_dates=file_dates)
 
 #Naviagte to this Function to Add a File
 @app.route('/upload_file_version', methods=['post'])
@@ -430,8 +496,8 @@ def uploadFileVersionHandler():
  return redirect('/')
 
 #Naviagte to this Function to Delete a Directory
-@app.route('/share_file/<string:filename>', methods=['post'])
-def shareFileHandler(filename):
+@app.route('/share_file/<string:dirname>/<string:filename>', methods=['post'])
+def shareFileHandler(dirname,filename):
  id_token = request.cookies.get("token")
  error_message = None
  claims = None
@@ -444,7 +510,7 @@ def shareFileHandler(filename):
    print(friend_id)
    print(filename)
    entity = datastore.Entity(key = datastore_client.key(friend_id))
-   entity.update({"shared_file_name" : filename})  #update will add attributes if they are not defined in the entity.
+   entity.update({"shared_file_name" : dirname + "/" + filename})  #update will add attributes if they are not defined in the entity.
                                        #if it already exists in the tnity, it will overwrite the value for that attribute.
    datastore_client.put(entity)       #store entity in the datastore
 
@@ -522,12 +588,12 @@ def deleteDir(filename):
   blob.delete()
 
 #Delete a File within a Directory
-def deleteBlob(filename):
+def deleteBlob(dirname,filename):
  print("File Deleted:", filename)
  currentDir = openedDirectory.getDirectory()
  storage_client = storage.Client(project=local_constants.PROJECT_NAME)
  bucket = storage_client.bucket(local_constants.PROJECT_STORAGE_BUCKET)
- filename = currentDir + "/" + filename
+ filename = dirname + "/" + filename
  blob = bucket.blob(filename)
  blob.delete()
  openedDirectory.setDirectory("")
@@ -563,17 +629,27 @@ def root():
    blob_list = blobList(None)
    for i in blob_list:
     if i.name[len(i.name) - 1] == '/':
-     directory_list.append(i)
+     query = datastore_client.query(kind=user_info['email'])   #query to retrieve the last number of 'visit' entities
+     print("Email:",user_info['email'])
+     friends_accessed_file = query.fetch(limit=10)               #fetch 'visit' entities from the datastore to the limit of the passed in parameter in the function
+
+     for k in friends_accessed_file:
+      if 'directory_name' in k:
+       print("Main User:",k['directory_name'])
+       if k['directory_name'] == i.name:
+        print("File:",k)
+        directory_list.append(i)
+     # directory_list.append(i)
     elif "/" not in i.name:
      file_list.append(i)
 
    blob_list = blobList(None)
    for i in blob_list:
-    if i.name[len(i.name) - 1] != '/':
+    if i.name[len(i.name) - 1] != '/' and i.name != '/':
      # shared_list.append(i)
      query = datastore_client.query(kind=user_info['email'])   #query to retrieve the last number of 'visit' entities
      friends_accessed_file = query.fetch(limit=10)               #fetch 'visit' entities from the datastore to the limit of the passed in parameter in the function
-     print(friends_accessed_file)
+     print("Hello:",i.name)
 
      full_path = i.name.split('/')
      file_path = full_path[0]
@@ -583,8 +659,8 @@ def root():
       print("Test:",k)
       if 'shared_file_name' in k:
        print("Main User:",k['shared_file_name'])
-       print("I Name:", file_name)
-       if k['shared_file_name'] == file_name:
+       print("I Name:", i.name)
+       if k['shared_file_name'] == i.name:
         print("File:",k)
         if 'shared_file_name' in k:
          print("Shared User:",k['shared_file_name'])#

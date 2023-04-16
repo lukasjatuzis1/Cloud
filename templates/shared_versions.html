@@ -19,28 +19,20 @@
         <dt>Email:</dt><dd>{{ user_data['email'] }}</dd>
       </dl>
 
-      <form action="/add_directory" method="post">
-        Directory Name: <input type="text" name="dir_name"/><input type="submit" value="Add Directory"/>
+      <form action="/upload_file_version" method="post" enctype="multipart/form-data">
+        Upload New Version File: <input type="file" name="file_name"/><input type="submit" value="Update Version"/>
       </form>
 
-      <h1>{{storage_size}}MB / 5MB</h1>
+      <form action="/back" method="post">
+        <input type="submit" value="Back to Home"/><br/>
+      </form>
 
-        <h1>list of directories</h1><br/>
-        {% for i in directory_list %}
-          <form action="/open_directory/{{ i.name }}" method="post">
-            {{ i.name }}<input type="submit" value="Open"/><br/>
-          </form>
-          <form action="/delete_directory/{{ i.name }}" method="post">
-           <input type="submit" value="Delete"/><br/>
-          </form>
-        {% endfor %}
-
-        <h1>List of Shared Files</h1><br/>
-        {% for i in shared_files %}
-          <form action="/shared_versions/{{ i.name }}" method="post">
-            {{ i.name }}<input type="submit" value="Open Versions"/><br/>
-          </form>
-        {% endfor %}
+      <h1>list of files</h1><br/>
+        {% for i in file_list %}
+        <form action="/download_file/{{ i.name }}" method="post">
+          {{ i.display_name }}<br/> {{i.date}} <br/><input type="submit" value="Download"/>
+        </form>
+      {% endfor %}
 
       {% elif error_message %}
       <p>Error Message: {{ error_message }}</p>
