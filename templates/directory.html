@@ -33,6 +33,9 @@
         <form action="/versions/{{ i.name }}" method="post">
           {{ i.display_name }}<input type="submit" value="Manage Versions"/><br/>
         </form>
+        <form action="/share_file/{{ i.name }}" method="post">
+          <input type="text" name="friend_id"/><input type="submit" value="Share"/>
+        </form>
       {% endfor %}
 
       {% elif error_message %}

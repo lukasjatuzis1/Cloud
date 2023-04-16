@@ -154,9 +154,10 @@ def addDirectoryHandler():
  return redirect('/')
 
 #Naviagte to this Function to Download a File
-@app.route('/download_file/<string:filename>', methods=['POST'])
-def downloadFile(filename):
- print("File Downloaded:", filename)
+@app.route('/download_file/<string:dirname>/<string:filename>', methods=['POST'])
+def downloadFile(dirname,filename):
+ print("File Downloaded:", filename, dirname)
+ # print("Path Downloaded:", dirname)
  id_token = request.cookies.get("token")
  error_message = None
  claims = None
@@ -168,7 +169,7 @@ def downloadFile(filename):
    claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
   except ValueError as exc:
    error_message = str(exc)
- return Response(downloadBlob(filename), mimetype='application/octet-stream')
+ return Response(downloadBlob(dirname,filename), mimetype='application/octet-stream')
 
 #Naviagte to this Function to Open a Directory
 @app.route('/open_directory/<string:filename>' + '/', methods=['POST'])
@@ -186,6 +187,7 @@ def openDirectory(filename):
  if id_token:
   try:
    claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
+   createUserInfo(claims)
    user_info = retrieveUserInfo(claims)
    if user_info == None:
     createUserInfo(claims)
@@ -212,9 +214,24 @@ def openDirectory(filename):
          found_same_file = "true"
          break
        if found_same_file == "false":
-        i.name = file_full_name
+        # i.name = file_full_name
         i.display_name = file_na
-        file_list.append(i)
+
+        query = datastore_client.query(kind=user_info['email'])   #query to retrieve the last number of 'visit' entities
+        print("Email:",user_info['email'])
+           #query.order = ['-timestamp']                   #the order in which we want the entites to return
+        friends_accessed_file = query.fetch(limit=10)               #fetch 'visit' entities from the datastore to the limit of the passed in parameter in the function
+        # print(friends_accessed_file)
+
+        for k in friends_accessed_file:
+         if 'file_name' in k:
+          print("Main User:",k['file_name'])
+          if k['file_name'] == file_full_name:
+           print("File:",k)
+           file_list.append(i)
+         if 'shared_user' in k:
+          print("Shared User:",k['shared_user'])
+
 
   except ValueError as exc:
    error_message = str(exc)
@@ -265,6 +282,10 @@ def uploadFileHandler():
     if storage_size_bytes > 5000000:
      print("Storage Over 5MB, Not Uploading File")
     else:
+     entity = datastore.Entity(key = datastore_client.key(user_info['email']))
+     entity.update({"file_name" : file.filename})  #update will add attributes if they are not defined in the entity.
+                                            #if it already exists in the tnity, it will overwrite the value for that attribute.
+     datastore_client.put(entity)       #store entity in the datastore
      addFile(file)
 
   except ValueError as exc:
@@ -305,17 +326,28 @@ def deleteDirectory(filename):
  return redirect('/')
 
 #Open Versions of Selected File
-@app.route('/versions/<string:filename>', methods=['post'])
-def versionFileHandler(filename):
+@app.route('/versions/<string:dirname>/<string:filename>', methods=['post'])
+def versionFileHandler(dirname,filename):
  id_token = request.cookies.get("token")
  error_message = None
  claims = None
  times = None
  user_info = None
+ print("1")
  if id_token:
+  print("2")
   try:
+   print("3")
    claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
+   print("4")
    user_info = retrieveUserInfo(claims)
+   print("5")
+   if user_info == None:
+    print("6")
+    createUserInfo(claims)
+    print("7")
+    user_info = retrieveUserInfo(claims)
+   print("8")
    file_versions = []
    file_dates = []
    blob_list = blobList(None)
@@ -330,7 +362,7 @@ def versionFileHandler(filename):
        full_path2 = filename.split("~", 1)
        file_name2 = full_path2[1]
        if file_name1 == file_name2:
-        i.name = file_version_name
+        # i.name = file_version_name
         print(i.time_created)
         date_raw = i.time_created
         date = date_raw.year , date_raw.month, date_raw.day
@@ -397,6 +429,40 @@ def uploadFileVersionHandler():
    error_message = str(exc)
  return redirect('/')
 
+#Naviagte to this Function to Delete a Directory
+@app.route('/share_file/<string:filename>', methods=['post'])
+def shareFileHandler(filename):
+ id_token = request.cookies.get("token")
+ error_message = None
+ claims = None
+ times = None
+ user_info = None
+ if id_token:
+  try:
+   claims = google.oauth2.id_token.verify_firebase_token(id_token, firebase_request_adapter)
+   friend_id = request.form['friend_id']
+   print(friend_id)
+   print(filename)
+   entity = datastore.Entity(key = datastore_client.key(friend_id))
+   entity.update({"shared_file_name" : filename})  #update will add attributes if they are not defined in the entity.
+                                       #if it already exists in the tnity, it will overwrite the value for that attribute.
+   datastore_client.put(entity)       #store entity in the datastore
+
+   query = datastore_client.query(kind=friend_id)   #query to retrieve the last number of 'visit' entities
+   #query.order = ['-timestamp']                   #the order in which we want the entites to return
+   friends_accessed_file = query.fetch(limit=10)               #fetch 'visit' entities from the datastore to the limit of the passed in parameter in the function
+   print(friends_accessed_file)
+
+   for i in friends_accessed_file:
+    print(i)
+    if 'main_user' in i:
+     print(i['main_user'])
+    if 'shared_user' in i:
+     print(i['shared_user'])
+  except ValueError as exc:
+   error_message = str(exc)
+ return redirect('/')
+
 #Get Storage Size
 def getStorageSize():
  size = 0
@@ -425,11 +491,12 @@ def addFile(file):
  blob.upload_from_file(file)
 
 #Download a file within a Directory
-def downloadBlob(filename):
+def downloadBlob(dirname,filename):
  storage_client = storage.Client(project=local_constants.PROJECT_NAME)
  bucket = storage_client.bucket(local_constants.PROJECT_STORAGE_BUCKET)
- if(openedDirectory.getDirectory() != ""): #upload file in current folder
-  filename = openedDirectory.getDirectory() + "/" + filename
+ # if(openedDirectory.getDirectory() != ""): #upload file in current folder
+ #  filename = openedDirectory.getDirectory() + "/" + filename
+ filename = dirname + "/" + filename
  blob = bucket.blob(filename)
  return blob.download_as_bytes()
 
@@ -481,6 +548,7 @@ def root():
  user_info = None
  file_list = []
  directory_list = []
+ shared_list = []
  openedDirectory.setDirectory("")
  openedRecord.setRecord("")
  if id_token:
@@ -499,12 +567,39 @@ def root():
     elif "/" not in i.name:
      file_list.append(i)
 
+   blob_list = blobList(None)
+   for i in blob_list:
+    if i.name[len(i.name) - 1] != '/':
+     # shared_list.append(i)
+     query = datastore_client.query(kind=user_info['email'])   #query to retrieve the last number of 'visit' entities
+     friends_accessed_file = query.fetch(limit=10)               #fetch 'visit' entities from the datastore to the limit of the passed in parameter in the function
+     print(friends_accessed_file)
+
+     full_path = i.name.split('/')
+     file_path = full_path[0]
+     file_name = full_path[1]
+
+     for k in friends_accessed_file:
+      print("Test:",k)
+      if 'shared_file_name' in k:
+       print("Main User:",k['shared_file_name'])
+       print("I Name:", file_name)
+       if k['shared_file_name'] == file_name:
+        print("File:",k)
+        if 'shared_file_name' in k:
+         print("Shared User:",k['shared_file_name'])#
+         # i.name = file_name
+         shared_list.append(i)
+
+
   except ValueError as exc:
    error_message = str(exc)
  storage_size_bytes = getStorageSize()
  storage_size_kb = storage_size_bytes/1000
  storage_size = storage_size_kb/1000
- return render_template('index.html', user_data=claims, error_message=error_message, user_info=user_info, directory_list=directory_list, storage_size=storage_size)
+
+
+ return render_template('index.html', user_data=claims, error_message=error_message, user_info=user_info, directory_list=directory_list, storage_size=storage_size, shared_files=shared_list)
 
 #Start Application
 if __name__ == '__main__':

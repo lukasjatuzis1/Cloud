@@ -35,6 +35,13 @@
           </form>
         {% endfor %}
 
+        <h1>List of Shared Files</h1><br/>
+        {% for i in shared_files %}
+          <form action="/versions/{{ i.name }}" method="post">
+            {{ i.name }}<input type="submit" value="Open Versions"/><br/>
+          </form>
+        {% endfor %}
+
       {% elif error_message %}
       <p>Error Message: {{ error_message }}</p>
       {% endif %}
