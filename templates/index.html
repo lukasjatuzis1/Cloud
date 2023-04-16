@@ -10,6 +10,7 @@
 <body>
 
 <div id="firebase-auth-container"></div>  <!--used by the firebase scripts for showing login options -->
+  <div class="header">
   <button id="sign-out" hidden="true">Sign out</button>
     <div id="login-info" hidden="true">
       <h2>Login Info</h2>
@@ -24,7 +25,8 @@
       </form>
 
       <h1>{{storage_size}}MB / 5MB</h1>
-
+      </div>
+    </div class=header>
         <h1>list of directories</h1><br/>
         {% for i in directory_list %}
           <form action="/open_directory/{{ i.name }}" method="post">
@@ -45,7 +47,7 @@
       {% elif error_message %}
       <p>Error Message: {{ error_message }}</p>
       {% endif %}
-</div>
+
 
 <script src="https://www.gstatic.com/firebasejs/7.14.5/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/7.8.0/firebase-auth.js"></script>
